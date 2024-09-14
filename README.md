@@ -13,4 +13,6 @@ Instale o framework flask (caso não tenha em su amáquina), para fazer isso dig
 
 Após a instalação do Flask, digite "python app.py" dentro da pasta onde salvou o projeto. Exemplo: Supondo que você armazenou o código na pasta todo_list em seus Documentos, você terá algo semelhante a isso -> C:\Users\UserName\Documents\todo_list> python app.py
 
+Após executar o comando "python app.py" o seu navegador abrirá no endereço http://127.0.0.1:5000
+
 QUanto ao banco de dados, o back-end verifica se há ou não tabela criada para armazenar as tarefas, caso não nenhuma tabela tenha sido criada, o back-end a criará para você.
