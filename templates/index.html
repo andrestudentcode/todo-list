@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>To-Do List</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/milligram/1.4.1/milligram.min.css">
+    <style>
+        body { margin-top: 40px; }
+        .completed { text-decoration: line-through; color: grey; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>To-Do List</h1>
+        <form action="/add" method="POST">
+            <input type="text" name="task" placeholder="Enter a new task" required>
+            <button type="submit">Add</button>
+        </form>
+        <ul>
+            {% for task in tasks %}
+                <li class="{{ 'completed' if task[2] == 'Completed' else '' }}">
+                    {{ task[1] }}
+                    <a href="/complete/{{ task[0] }}">✔</a>
+                    <a href="/delete/{{ task[0] }}">✖</a>
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
+</body>
+</html>
