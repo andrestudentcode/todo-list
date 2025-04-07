@@ -2,7 +2,7 @@
 To Do List using the framework Flask for web development in Python
 
 O app contém:
-Front-end usando Milligram https://milligram.io/, um framework minimalista para o estilo da página.
+Front-end usando Bootstrap 5.
 Back-end em Flask
 Banco de Dados SQLite
 
@@ -15,4 +15,4 @@ Após a instalação do Flask, digite "python app.py" dentro da pasta onde salvo
 
 Após executar o comando "python app.py" o seu navegador abrirá no endereço http://127.0.0.1:5000
 
-QUanto ao banco de dados, o back-end verifica se há ou não tabela criada para armazenar as tarefas, caso não nenhuma tabela tenha sido criada, o back-end a criará para você.
+Quanto ao banco de dados, o back-end verifica se há ou não tabela criada para armazenar as tarefas, caso não nenhuma tabela tenha sido criada, o back-end a criará para você.
