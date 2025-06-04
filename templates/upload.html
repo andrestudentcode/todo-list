@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Upload a file to S3</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    >
+  </head>
+  <body class="p-5">
+    <h1 class="mb-4">Upload a file</h1>
+
+    <form id="upload-form" class="mb-3">
+      <input type="file" id="file-input" class="form-control-file" required>
+      <button class="btn btn-primary mt-3">Upload</button>
+    </form>
+
+    <div id="result"></div>
+
+    <script>
+      document.getElementById('upload-form').addEventListener('submit', async e => {
+        e.preventDefault();
+        const fileInput = document.getElementById('file-input');
+        if (!fileInput.files.length) return alert('Select a file!');
+
+        const file = fileInput.files[0];
+        // 1) get a presigned POST from our server
+        const signRes = await fetch(`/sign-s3?file_name=${encodeURIComponent(file.name)}&file_type=${encodeURIComponent(file.type)}`);
+        const { url, fields, error } = await signRes.json();
+        if (error) return alert(error);
+
+        // 2) build a FormData and POST directly to S3
+        const formData = new FormData();
+        Object.entries(fields).forEach(([k,v]) => formData.append(k, v));
+        formData.append('file', file);
+
+        const uploadRes = await fetch(url, {
+          method: 'POST',
+          body: formData
+        });
+
+        if (uploadRes.ok) {
+          document.getElementById('result').innerHTML =
+            `<div class="alert alert-success">✓ File uploaded!  
+              <a href="https://${S3_BUCKET}.s3.${AWS_REGION}.amazonaws.com/${file.name}" target="_blank">View it on S3</a>
+            </div>`;
+        } else {
+          document.getElementById('result').innerHTML =
+            `<div class="alert alert-danger">Failed to upload. (HTTP ${uploadRes.status})</div>`;
+        }
+      });
+    </script>
+  </body>
+</html>
