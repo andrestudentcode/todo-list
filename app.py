@@ -6,13 +6,16 @@ from sendgrid.helpers.mail import Mail
 import openai
 import os
 from dotenv import load_dotenv
+import boto3
+from flask import jsonify, make_response
+from botocore.exceptions import ClientError
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'  # Replace with a secure key in production
 
 load_dotenv()
-# Load the API key from environment variable
-openai.api_key = os.getenv('OPENAI_API_KEY')
+# Use the new OpenAI client
+openai_client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
 def init_db():
     conn = sqlite3.connect('todo.db')
@@ -98,6 +101,53 @@ def get_team_name(team_id):
     team = c.fetchone()
     conn.close()
     return team[0] if team else "No team"
+
+# after your other imports
+AWS_REGION = os.getenv("AWS_REGION")
+S3_BUCKET  = os.getenv("AWS_BUCKET_NAME")
+
+s3_client = boto3.client(
+    "s3",
+    region_name=AWS_REGION,
+    aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+    aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+)
+
+@app.route('/upload', methods=['GET'])
+def upload_form():
+    # Renders a page with a file input
+    return render_template('upload.html')
+
+@app.route('/sign-s3')
+def sign_s3():
+    file_name = request.args.get('file_name')
+    file_type = request.args.get('file_type')
+    if not file_name or not file_type:
+        return jsonify(error="Missing file_name or file_type"), 400
+
+    # you can namespace your "folders" here if you like:
+    key = f"uploads/{file_name}"
+
+    try:
+        post_data = s3_client.generate_presigned_post(
+            Bucket=S3_BUCKET,
+            Key=key,
+            Fields={
+                "acl": "public-read",
+                "Content-Type": file_type
+            },
+            Conditions=[
+                {"acl": "public-read"},
+                {"Content-Type": file_type},
+                ["content-length-range", 0, 10 * 1024 * 1024]  # up to 10 MB
+            ],
+            ExpiresIn=3600
+        )
+    except ClientError as e:
+        return jsonify(error=str(e)), 500
+
+    # post_data is a dict with { "url": ..., "fields": { ... } }
+    return make_response(jsonify(post_data), 200)
 
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
@@ -239,12 +289,19 @@ def index():
 
     if team_id:
         c.execute('''
-            SELECT todos.* FROM todos
+            SELECT todos.id, todos.task, todos.status, todos.user_id, todos.api_response 
+            FROM todos
             JOIN users ON todos.user_id = users.id
             WHERE users.team_id=?
+            ORDER BY todos.id DESC
         ''', (team_id,))
     else:
-        c.execute('SELECT * FROM todos WHERE user_id=?', (user_id,))
+        c.execute('''
+            SELECT id, task, status, user_id, api_response 
+            FROM todos 
+            WHERE user_id=?
+            ORDER BY id DESC
+        ''', (user_id,))
 
     tasks = c.fetchall()
     conn.close()
@@ -264,29 +321,9 @@ def add_task():
         team_id = session['team_id']
         api_response = ""
 
-        conn = sqlite3.connect('todo.db')
-        c = conn.cursor()
-        c.execute(
-            "INSERT INTO todos (task, status, user_id, team_id, api_response) VALUES (?, ?, ?, ?, ?)",
-            (task, 'Pending', user_id, team_id, api_response)
-        )
-        conn.commit()
-        conn.close()
-    return redirect(url_for('index'))
-
-
-'''
-@app.route('/add', methods=['POST'])
-def add_task():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    task = request.form['task']
-    if task:
-        user_id = session['user_id']
         # Send the task to the OpenAI API
         try:
-            # Create a chat completion
-            response = openai.ChatCompletion.create(
+            response = openai_client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[
                     {"role": "system", "content": "You are an assistant that provides ideas, links, and books related to a given task."},
@@ -295,20 +332,24 @@ def add_task():
                 max_tokens=200,
                 temperature=0.7
             )
-            # Extract the assistant's reply
-            api_response = response['choices'][0]['message']['content'].strip()
+            api_response = response.choices[0].message.content.strip()
         except Exception as e:
             api_response = "Error retrieving information. Please try again later."
             print(f"OpenAI API error: {e}")
-        # Store the task and the API response in the database
+
         conn = sqlite3.connect('todo.db')
         c = conn.cursor()
-        c.execute("INSERT INTO todos (task, status, user_id, api_response) VALUES (?, ?, ?, ?)",
-                  (task, 'Pending', user_id, api_response))
-        conn.commit()
+        # Check if the task already exists for this user
+        c.execute("SELECT id FROM todos WHERE task=? AND user_id=?", (task, user_id))
+        if c.fetchone() is None:
+            c.execute(
+                "INSERT INTO todos (task, status, user_id, team_id, api_response) VALUES (?, ?, ?, ?, ?)",
+                (task, 'Pending', user_id, team_id, api_response)
+            )
+            conn.commit()
         conn.close()
     return redirect(url_for('index'))
-'''
+
 
 @app.route('/delete/<int:task_id>')
 def delete_task(task_id):
